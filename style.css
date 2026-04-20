@@ -1,7 +1,6 @@
 body {
-    font-family: Arial;
     text-align: center;
-    padding: 20px;
+    font-family: Arial;
 }
 
 canvas {
@@ -10,10 +9,7 @@ canvas {
     border: 1px solid #333;
 }
 
-.controls {
-    margin-top: 10px;
-}
-
 button {
-    padding: 6px 12px;
+    margin-top: 10px;
+    padding: 8px 16px;
 }
