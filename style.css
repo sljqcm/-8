@@ -1,0 +1,23 @@
+body {
+    font-family: Arial;
+    text-align: center;
+}
+
+#preview {
+    margin-top: 20px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.preview-img {
+    width: 120px;
+    border: 2px solid #ccc;
+    cursor: move;
+}
+
+canvas {
+    margin-top: 20px;
+    border: 1px solid #000;
+}
