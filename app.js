@@ -1,73 +1,121 @@
-const upload = document.getElementById('upload');
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
+const upload = document.getElementById('upload');
 const downloadBtn = document.getElementById('download');
 
-// 🔥 你的透明模板（必须存在）
-const TEMPLATE_SRC = 'template.png';
+const template = new Image();
+template.src = 'template.png';
 
-// 👉 模板中“用户图片放置区域”（你需要改这个）
-const TARGET = {
+let userImg = null;
+
+// 👉 控制参数（关键）
+let state = {
     x: 100,
-    y: 150,
-    width: 300,
-    height: 300
+    y: 100,
+    scale: 1,
+    dragging: false,
+    startX: 0,
+    startY: 0
 };
 
-let templateImg = new Image();
-templateImg.src = TEMPLATE_SRC;
+// 初始化
+template.onload = () => {
+    canvas.width = template.width;
+    canvas.height = template.height;
+    render();
+};
 
-upload.addEventListener('change', (e) => {
+// 上传图片
+upload.addEventListener('change', e => {
     const file = e.target.files[0];
     if (!file) return;
 
-    const userImg = new Image();
+    userImg = new Image();
     userImg.src = URL.createObjectURL(file);
 
-    userImg.onload = () => {
-        render(userImg);
-    };
+    userImg.onload = render;
 });
 
-function render(userImg) {
-    // 设置画布为模板大小
-    canvas.width = templateImg.width;
-    canvas.height = templateImg.height;
+// 渲染
+function render() {
+    if (!template) return;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // ① 画用户图片（自动填充目标区域）
-    drawCover(userImg, TARGET);
+    if (userImg) {
+        const w = userImg.width * state.scale;
+        const h = userImg.height * state.scale;
 
-    // ② 覆盖透明模板（关键）
-    ctx.drawImage(templateImg, 0, 0);
-}
-
-// 👉 等比填充（不会变形）
-function drawCover(img, target) {
-    const imgRatio = img.width / img.height;
-    const targetRatio = target.width / target.height;
-
-    let drawWidth, drawHeight;
-
-    if (imgRatio > targetRatio) {
-        drawHeight = target.height;
-        drawWidth = drawHeight * imgRatio;
-    } else {
-        drawWidth = target.width;
-        drawHeight = drawWidth / imgRatio;
+        ctx.drawImage(userImg, state.x, state.y, w, h);
     }
 
-    const dx = target.x - (drawWidth - target.width) / 2;
-    const dy = target.y - (drawHeight - target.height) / 2;
-
-    ctx.drawImage(img, dx, dy, drawWidth, drawHeight);
+    // 覆盖模板（关键）
+    ctx.drawImage(template, 0, 0);
 }
+
+// 鼠标拖动
+canvas.addEventListener('mousedown', e => {
+    state.dragging = true;
+    state.startX = e.offsetX - state.x;
+    state.startY = e.offsetY - state.y;
+});
+
+canvas.addEventListener('mousemove', e => {
+    if (!state.dragging) return;
+
+    state.x = e.offsetX - state.startX;
+    state.y = e.offsetY - state.startY;
+
+    render();
+});
+
+canvas.addEventListener('mouseup', () => {
+    state.dragging = false;
+});
+
+// 👉 滚轮缩放（像那个网站一样）
+canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+
+    const scaleAmount = -e.deltaY * 0.001;
+    state.scale += scaleAmount;
+
+    if (state.scale < 0.1) state.scale = 0.1;
+    if (state.scale > 5) state.scale = 5;
+
+    render();
+});
+
+// 👉 手机触摸支持
+canvas.addEventListener('touchstart', e => {
+    const touch = e.touches[0];
+    const rect = canvas.getBoundingClientRect();
+
+    state.dragging = true;
+    state.startX = touch.clientX - rect.left - state.x;
+    state.startY = touch.clientY - rect.top - state.y;
+});
+
+canvas.addEventListener('touchmove', e => {
+    if (!state.dragging) return;
+
+    const touch = e.touches[0];
+    const rect = canvas.getBoundingClientRect();
+
+    state.x = touch.clientX - rect.left - state.startX;
+    state.y = touch.clientY - rect.top - state.startY;
+
+    render();
+});
+
+canvas.addEventListener('touchend', () => {
+    state.dragging = false;
+});
 
 // 下载
 downloadBtn.onclick = () => {
     const link = document.createElement('a');
-    link.download = 'fusion.png';
-    link.href = canvas.toDataURL('image/png');
+    link.download = 'result.png';
+    link.href = canvas.toDataURL();
     link.click();
 };
