@@ -3,14 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI 自动抠图合成工具</title>
+    <title>AI 自动抠图与遮蔽工具</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         #canvasContainer { touch-action: none; user-select: none; }
-        canvas { border: 1px solid #ddd; background-image: 
-            linear-gradient(45deg, #eee 25%, transparent 25%, transparent 75%, #eee 75%, #eee), 
-            linear-gradient(45deg, #eee 25%, white 25%, white 75%, #eee 75%, #eee);
-            background-size: 20px 20px; background-position: 0 0, 10px 10px; }
+        canvas { 
+            border: 1px solid #ddd; 
+            cursor: move; 
+            /* 背景显示棋盘格，用于直观观察透明区域 */
+            background-image: linear-gradient(45deg, #eee 25%, transparent 25%, transparent 75%, #eee 75%, #eee), 
+                              linear-gradient(45deg, #eee 25%, white 25%, white 75%, #eee 75%, #eee);
+            background-size: 20px 20px; 
+            background-position: 0 0, 10px 10px; 
+        }
     </style>
 </head>
 <body class="bg-slate-100 min-h-screen p-4 flex items-center justify-center">
@@ -22,11 +27,16 @@
             <div class="space-y-4">
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">1. 上传圆环模板</label>
-                    <input type="file" id="tpl" accept="image/*" class="text-sm">
+                    <input type="file" id="tpl" accept="image/*" class="text-sm block w-full">
                 </div>
                 <div>
                     <label class="block text-sm font-medium text-gray-700 mb-2">2. 上传用户照片</label>
-                    <input type="file" id="img" accept="image/*" class="text-sm">
+                    <input type="file" id="img" accept="image/*" class="text-sm block w-full">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">图片缩放 (<span id="zoomVal">100</span>%)</label>
+                    <input type="range" id="zoomRange" min="10" max="300" value="100" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600">
                 </div>
             </div>
 
@@ -34,8 +44,11 @@
                 合并并下载结果
             </button>
 
-            <div class="text-xs text-gray-400 bg-gray-50 p-3 rounded">
-                💡 自动处理说明：系统会自动识别模板中的“四色圆环”，并将中间的白色或灰色背景设为完全透明。
+            <div class="text-xs text-gray-400 bg-gray-50 p-3 rounded leading-relaxed">
+                💡 <b>使用技巧：</b><br>
+                • <b>拖拽：</b>在右侧画布按住并移动照片。<br>
+                • <b>遮蔽：</b>照片超出圆环外圈的部分会自动切除。<br>
+                • <b>缩放：</b>使用上方滑块或鼠标滚轮调节大小。
             </div>
         </div>
 
@@ -50,49 +63,77 @@
         const tplInput = document.getElementById('tpl');
         const imgInput = document.getElementById('img');
         const downloadBtn = document.getElementById('download');
+        const zoomRange = document.getElementById('zoomRange');
+        const zoomVal = document.getElementById('zoomVal');
 
         let templateImg = null;
         let userImg = null;
 
-        // 设置用户图片在模板中的位置（可根据你的模板自行调整）
-        const target = { x: 0, y: 0, width: 800, height: 800 };
+        // 图片交互状态
+        let imgState = {
+            x: 0, 
+            y: 0, 
+            scale: 1.0, 
+            isDragging: false,
+            startX: 0, 
+            startY: 0, 
+            baseScale: 1.0 
+        };
 
-        // 1. 上传模板
+        // 1. 监听模板上传
         tplInput.addEventListener('change', e => {
             const file = e.target.files[0];
             if (!file) return;
             templateImg = new Image();
             templateImg.src = URL.createObjectURL(file);
-            templateImg.onload = render;
+            templateImg.onload = () => {
+                canvas.width = templateImg.width;
+                canvas.height = templateImg.height;
+                render();
+            };
         });
 
-        // 2. 上传内容图
+        // 2. 监听照片上传
         imgInput.addEventListener('change', e => {
             const file = e.target.files[0];
             if (!file) return;
             userImg = new Image();
             userImg.src = URL.createObjectURL(file);
-            userImg.onload = render;
+            userImg.onload = () => {
+                imgState.x = canvas.width / 2;
+                imgState.y = canvas.height / 2;
+                // 计算初始缩放比例，使其填满画布
+                imgState.baseScale = Math.max(canvas.width / userImg.width, canvas.height / userImg.height);
+                imgState.scale = imgState.baseScale; 
+                zoomRange.value = 100;
+                zoomVal.innerText = 100;
+                render();
+            };
         });
 
-        // 3. 核心渲染逻辑
+        // 3. 核心渲染
         function render() {
             if (!templateImg) return;
 
-            // 以模板图尺寸为准
-            canvas.width = templateImg.width;
-            canvas.height = templateImg.height;
-            target.width = canvas.width;
-            target.height = canvas.height;
-
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // ① 先画用户图片（放在底层）
-            if (userImg) {
-                drawCover(userImg, target);
-            }
+            // --- 步骤 A: 创建裁剪蒙版 (遮蔽外圈) ---
+            ctx.save();
+            ctx.beginPath();
+            // 假设圆心在画布中央，半径为画布宽的一半
+            const radius = Math.min(canvas.width, canvas.height) / 2;
+            ctx.arc(canvas.width / 2, canvas.height / 2, radius, 0, Math.PI * 2);
+            ctx.clip(); 
 
-            // ② 在内存中处理模板（强行去除背景）
+            // --- 步骤 B: 绘制用户照片 ---
+            if (userImg) {
+                const drawW = userImg.width * imgState.scale;
+                const drawH = userImg.height * imgState.scale;
+                ctx.drawImage(userImg, imgState.x - drawW / 2, imgState.y - drawH / 2, drawW, drawH);
+            }
+            ctx.restore(); // 结束蒙版，恢复正常绘图
+
+            // --- 步骤 C: 处理圆环底片 (像素过滤) ---
             const tempCanvas = document.createElement('canvas');
             tempCanvas.width = canvas.width;
             tempCanvas.height = canvas.height;
@@ -102,51 +143,80 @@
             const imgData = tCtx.getImageData(0, 0, canvas.width, canvas.height);
             const data = imgData.data;
 
-            // 像素过滤算法
             for (let i = 0; i < data.length; i += 4) {
-                const r = data[i];
-                const g = data[i+1];
-                const b = data[i+2];
-
-                // 逻辑：如果 RGB 三值非常接近（灰色/白色/黑色），则视为背景
-                // 这里设置阈值为颜色差异小于 30，且亮度高于 120（避开深色圆环）
-                const isGrayish = Math.abs(r - g) < 30 && Math.abs(g - b) < 30 && Math.abs(r - b) < 30;
-                const isBright = r > 120 && g > 120 && b > 120;
-
+                const r = data[i], g = data[i+1], b = data[i+2];
+                // 识别灰色和白色区域并将其设为透明
+                const isGrayish = Math.abs(r - g) < 25 && Math.abs(g - b) < 25 && Math.abs(r - b) < 25;
+                const isBright = r > 110 && g > 110 && b > 110;
                 if (isGrayish && isBright) {
-                    data[i + 3] = 0; // 设为完全透明
+                    data[i + 3] = 0; 
                 }
             }
-            
             tCtx.putImageData(imgData, 0, 0);
 
-            // ③ 最后把处理好的圆环盖在照片上
+            // --- 步骤 D: 覆盖圆环到最顶层 ---
             ctx.drawImage(tempCanvas, 0, 0);
         }
 
-        // 等比填充函数
-        function drawCover(img, t) {
-            const ir = img.width / img.height;
-            const tr = t.width / t.height;
-            let w, h, x, y;
+        // --- 交互功能实现 ---
 
-            if (ir > tr) {
-                h = t.height;
-                w = h * ir;
-            } else {
-                w = t.width;
-                h = w / ir;
-            }
+        // 缩放滑块
+        zoomRange.addEventListener('input', (e) => {
+            if (!userImg) return;
+            const val = e.target.value;
+            zoomVal.innerText = val;
+            imgState.scale = imgState.baseScale * (val / 100);
+            render();
+        });
 
-            x = t.x - (w - t.width) / 2;
-            y = t.y - (h - t.height) / 2;
-            ctx.drawImage(img, x, y, w, h);
-        }
+        // 鼠标按下
+        canvas.addEventListener('mousedown', (e) => {
+            if (!userImg) return;
+            imgState.isDragging = true;
+            const rect = canvas.getBoundingClientRect();
+            imgState.startX = (e.clientX - rect.left) * (canvas.width / rect.width);
+            imgState.startY = (e.clientY - rect.top) * (canvas.height / rect.height);
+            canvas.style.cursor = 'grabbing';
+        });
 
-        // 下载功能
+        // 鼠标移动
+        window.addEventListener('mousemove', (e) => {
+            if (!imgState.isDragging || !userImg) return;
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = (e.clientX - rect.left) * (canvas.width / rect.width);
+            const mouseY = (e.clientY - rect.top) * (canvas.height / rect.height);
+
+            const dx = mouseX - imgState.startX;
+            const dy = mouseY - imgState.startY;
+
+            imgState.x += dx;
+            imgState.y += dy;
+            imgState.startX = mouseX;
+            imgState.startY = mouseY;
+
+            render();
+        });
+
+        // 鼠标松开
+        window.addEventListener('mouseup', () => {
+            imgState.isDragging = false;
+            canvas.style.cursor = 'move';
+        });
+
+        // 滚轮支持
+        canvas.addEventListener('wheel', (e) => {
+            if (!userImg) return;
+            e.preventDefault();
+            let newZoom = parseInt(zoomRange.value) - (e.deltaY / 12);
+            newZoom = Math.max(10, Math.min(300, newZoom));
+            zoomRange.value = newZoom;
+            zoomRange.dispatchEvent(new Event('input'));
+        });
+
+        // 下载结果
         downloadBtn.onclick = () => {
             const a = document.createElement('a');
-            a.download = 'ai_output.png';
+            a.download = 'result_avatar.png';
             a.href = canvas.toDataURL('image/png');
             a.click();
         };
