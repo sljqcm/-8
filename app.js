@@ -1,32 +1,38 @@
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
-const upload = document.getElementById('upload');
+
+const tplInput = document.getElementById('tpl');
+const imgInput = document.getElementById('img');
 const downloadBtn = document.getElementById('download');
 
-const template = new Image();
-template.src = 'template.png';
-
+let templateImg = null;
 let userImg = null;
 
-// 👉 控制参数（关键）
-let state = {
+// 👉 固定放置区域（你可以后面改）
+const target = {
     x: 100,
     y: 100,
-    scale: 1,
-    dragging: false,
-    startX: 0,
-    startY: 0
+    width: 300,
+    height: 300
 };
 
-// 初始化
-template.onload = () => {
-    canvas.width = template.width;
-    canvas.height = template.height;
-    render();
-};
+// =======================
+// 上传模板（透明PNG）
+// =======================
+tplInput.addEventListener('change', e => {
+    const file = e.target.files[0];
+    if (!file) return;
 
-// 上传图片
-upload.addEventListener('change', e => {
+    templateImg = new Image();
+    templateImg.src = URL.createObjectURL(file);
+
+    templateImg.onload = render;
+});
+
+// =======================
+// 上传内容图片
+// =======================
+imgInput.addEventListener('change', e => {
     const file = e.target.files[0];
     if (!file) return;
 
@@ -36,86 +42,55 @@ upload.addEventListener('change', e => {
     userImg.onload = render;
 });
 
-// 渲染
+// =======================
+// 核心渲染
+// =======================
 function render() {
-    if (!template) return;
+    if (!templateImg) return;
+
+    canvas.width = templateImg.width;
+    canvas.height = templateImg.height;
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+    // ① 先画用户图片（填充目标区域）
     if (userImg) {
-        const w = userImg.width * state.scale;
-        const h = userImg.height * state.scale;
-
-        ctx.drawImage(userImg, state.x, state.y, w, h);
+        drawCover(userImg, target);
     }
 
-    // 覆盖模板（关键）
-    ctx.drawImage(template, 0, 0);
+    // ② 再画透明模板（覆盖层）
+    ctx.drawImage(templateImg, 0, 0);
 }
 
-// 鼠标拖动
-canvas.addEventListener('mousedown', e => {
-    state.dragging = true;
-    state.startX = e.offsetX - state.x;
-    state.startY = e.offsetY - state.y;
-});
+// =======================
+// 等比填充（不变形）
+// =======================
+function drawCover(img, t) {
+    const ir = img.width / img.height;
+    const tr = t.width / t.height;
 
-canvas.addEventListener('mousemove', e => {
-    if (!state.dragging) return;
+    let w, h;
 
-    state.x = e.offsetX - state.startX;
-    state.y = e.offsetY - state.startY;
+    if (ir > tr) {
+        h = t.height;
+        w = h * ir;
+    } else {
+        w = t.width;
+        h = w / ir;
+    }
 
-    render();
-});
+    const x = t.x - (w - t.width) / 2;
+    const y = t.y - (h - t.height) / 2;
 
-canvas.addEventListener('mouseup', () => {
-    state.dragging = false;
-});
+    ctx.drawImage(img, x, y, w, h);
+}
 
-// 👉 滚轮缩放（像那个网站一样）
-canvas.addEventListener('wheel', e => {
-    e.preventDefault();
-
-    const scaleAmount = -e.deltaY * 0.001;
-    state.scale += scaleAmount;
-
-    if (state.scale < 0.1) state.scale = 0.1;
-    if (state.scale > 5) state.scale = 5;
-
-    render();
-});
-
-// 👉 手机触摸支持
-canvas.addEventListener('touchstart', e => {
-    const touch = e.touches[0];
-    const rect = canvas.getBoundingClientRect();
-
-    state.dragging = true;
-    state.startX = touch.clientX - rect.left - state.x;
-    state.startY = touch.clientY - rect.top - state.y;
-});
-
-canvas.addEventListener('touchmove', e => {
-    if (!state.dragging) return;
-
-    const touch = e.touches[0];
-    const rect = canvas.getBoundingClientRect();
-
-    state.x = touch.clientX - rect.left - state.startX;
-    state.y = touch.clientY - rect.top - state.startY;
-
-    render();
-});
-
-canvas.addEventListener('touchend', () => {
-    state.dragging = false;
-});
-
+// =======================
 // 下载
+// =======================
 downloadBtn.onclick = () => {
-    const link = document.createElement('a');
-    link.download = 'result.png';
-    link.href = canvas.toDataURL();
-    link.click();
+    const a = document.createElement('a');
+    a.download = 'result.png';
+    a.href = canvas.toDataURL('image/png');
+    a.click();
 };
