@@ -3,17 +3,27 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>图片融合（高级版）</title>
-<link rel="stylesheet" href="style.css">
+<title>图片融合工具</title>
+<style>
+body { text-align:center; font-family:Arial; }
+canvas { border:1px solid #000; margin-top:10px; max-width:100%; }
+</style>
 </head>
+
 <body>
 
-<h3>上传图片后拖动调整位置</h3>
+<h3>上传透明模板 + 图片自动融合</h3>
 
-<input type="file" id="upload" accept="image/*">
+<p>① 上传透明底图（模板PNG）</p>
+<input type="file" id="tpl" accept="image/*">
 
+<p>② 上传内容图片</p>
+<input type="file" id="img" accept="image/*">
+
+<br><br>
 <canvas id="canvas"></canvas>
 
+<br>
 <button id="download">下载</button>
 
 <script src="app.js"></script>
