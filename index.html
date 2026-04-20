@@ -3,26 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>自动拼图工具</title>
+    <title>图片融合工具</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<h2>自动拼图工具（Cloudflare版）</h2>
+<h2>图片融合工具（模板叠加）</h2>
 
-<input type="file" id="upload" multiple accept="image/*">
+<input type="file" id="upload" accept="image/*">
 
-<div class="controls">
-    <select id="mode">
-        <option value="horizontal">横向拼接</option>
-        <option value="vertical">纵向拼接</option>
-        <option value="grid">网格拼接</option>
-    </select>
-
-    <button id="download">下载</button>
-</div>
+<p>上传图片后自动融合</p>
 
 <canvas id="canvas"></canvas>
+
+<button id="download">下载结果</button>
 
 <script src="app.js"></script>
 </body>
