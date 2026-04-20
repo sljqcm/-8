@@ -1,91 +1,73 @@
 const upload = document.getElementById('upload');
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
-const modeSelect = document.getElementById('mode');
 const downloadBtn = document.getElementById('download');
 
-let images = [];
+// 🔥 你的透明模板（必须存在）
+const TEMPLATE_SRC = 'template.png';
 
-upload.addEventListener('change', async (e) => {
-    const files = Array.from(e.target.files);
+// 👉 模板中“用户图片放置区域”（你需要改这个）
+const TARGET = {
+    x: 100,
+    y: 150,
+    width: 300,
+    height: 300
+};
 
-    images = await Promise.all(files.map(loadImage));
+let templateImg = new Image();
+templateImg.src = TEMPLATE_SRC;
 
-    autoMerge(); // ✅ 自动拼图
+upload.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const userImg = new Image();
+    userImg.src = URL.createObjectURL(file);
+
+    userImg.onload = () => {
+        render(userImg);
+    };
 });
 
-modeSelect.addEventListener('change', autoMerge);
+function render(userImg) {
+    // 设置画布为模板大小
+    canvas.width = templateImg.width;
+    canvas.height = templateImg.height;
 
-function loadImage(file) {
-    return new Promise((resolve) => {
-        const img = new Image();
-        img.src = URL.createObjectURL(file);
-        img.onload = () => resolve(img);
-    });
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // ① 画用户图片（自动填充目标区域）
+    drawCover(userImg, TARGET);
+
+    // ② 覆盖透明模板（关键）
+    ctx.drawImage(templateImg, 0, 0);
 }
 
-function autoMerge() {
-    if (images.length === 0) return;
+// 👉 等比填充（不会变形）
+function drawCover(img, target) {
+    const imgRatio = img.width / img.height;
+    const targetRatio = target.width / target.height;
 
-    const mode = modeSelect.value;
+    let drawWidth, drawHeight;
 
-    if (mode === 'horizontal') mergeHorizontal();
-    if (mode === 'vertical') mergeVertical();
-    if (mode === 'grid') mergeGrid();
-}
+    if (imgRatio > targetRatio) {
+        drawHeight = target.height;
+        drawWidth = drawHeight * imgRatio;
+    } else {
+        drawWidth = target.width;
+        drawHeight = drawWidth / imgRatio;
+    }
 
-// 横向拼接
-function mergeHorizontal() {
-    const height = Math.max(...images.map(i => i.height));
-    const width = images.reduce((sum, i) => sum + i.width, 0);
+    const dx = target.x - (drawWidth - target.width) / 2;
+    const dy = target.y - (drawHeight - target.height) / 2;
 
-    canvas.width = width;
-    canvas.height = height;
-
-    let x = 0;
-    images.forEach(img => {
-        ctx.drawImage(img, x, 0);
-        x += img.width;
-    });
-}
-
-// 纵向拼接
-function mergeVertical() {
-    const width = Math.max(...images.map(i => i.width));
-    const height = images.reduce((sum, i) => sum + i.height, 0);
-
-    canvas.width = width;
-    canvas.height = height;
-
-    let y = 0;
-    images.forEach(img => {
-        ctx.drawImage(img, 0, y);
-        y += img.height;
-    });
-}
-
-// 网格拼接（自动计算列数）
-function mergeGrid() {
-    const cols = Math.ceil(Math.sqrt(images.length));
-    const rows = Math.ceil(images.length / cols);
-
-    const size = 200; // 每张缩放尺寸
-
-    canvas.width = cols * size;
-    canvas.height = rows * size;
-
-    images.forEach((img, index) => {
-        const x = (index % cols) * size;
-        const y = Math.floor(index / cols) * size;
-
-        ctx.drawImage(img, x, y, size, size);
-    });
+    ctx.drawImage(img, dx, dy, drawWidth, drawHeight);
 }
 
 // 下载
 downloadBtn.onclick = () => {
     const link = document.createElement('a');
-    link.download = 'merged.png';
+    link.download = 'fusion.png';
     link.href = canvas.toDataURL('image/png');
     link.click();
 };
